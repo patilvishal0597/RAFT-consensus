@@ -14,7 +14,7 @@ services:
       - 8089:8000
     environment:
       - NODE_PORT=8089
-      - SERVER_NUMBER=1
+      - SERVER_NAME=Node1
 
   node2:
     container_name : Node2
@@ -30,4 +30,20 @@ services:
       - 8088:8000
     environment:
       - NODE_PORT=8088
-      - SERVER_NUMBER=2
+      - SERVER_NAME=Node2
+
+  node3:
+    container_name : Node3
+    build:
+      dockerfile: Dockerfile
+      context: "./node"
+    volumes:
+    - /app/node_modules
+    - ./node:/app
+    image: phase3_node
+    restart: always
+    ports:
+      - 8087:8000
+    environment:
+      - NODE_PORT=8088
+      - SERVER_NAME=Node3
