@@ -7,7 +7,7 @@ var socketServer = UDP_Socket.createSocket('udp4');
 
 const PORT = 8000;
 const SERVER_DETAIL = process.env.SERVER_NAME
-const SERVER_ARRAY=['Node1', 'Node2', 'Node3']
+const SERVER_ARRAY=['Node1', 'Node2', 'Node3', 'Node4', 'Node5']
 
 socketServer.bind(PORT, () => {
   socketServer.setRecvBufferSize(9999999);
@@ -19,39 +19,42 @@ socketServer.bind(PORT, () => {
 //     }
 //     setTimeout(300)
 // }
-
-const listener = (socketServer) => {
-    socketServer.on('message',function(msg, rinfo) {
-      console.log(`I received this msg: ${msg}`)
-    });
-}
-listener(socketServer)
-const sender = (socketServer, destination, increment) => {
-  const data = `Sending message from ${SERVER_DETAIL}: ITER ${increment}`
-  var msg = new Buffer.from(data)
-  socketServer
-    .send(
-      msg,
-      0,
-      msg.length,
-      PORT,
-      destination,
-      function(err, bytes){
-        if (err) throw err;
-        console.log(`UDP message sent to ${destination}`);
-    });
-  setTimeout(function() {}, 2000);
-}
-
-for (var i = 0; i < SERVER_ARRAY.length; i++) {
-  if (SERVER_ARRAY[i] !== SERVER_DETAIL) {
-    for (var j = 0; j < 10; j++) {
-      sender(socketServer, SERVER_ARRAY[i], j)
+async function main() {
+    const listener = (socketServer) => {
+        socketServer.on('message',function(msg, rinfo) {
+        console.log(`I received this msg: ${msg}`)
+        });
     }
-  }
+    listener(socketServer)
+    const sender = (socketServer, destination) => {
+    const data = `Sending message from ${SERVER_DETAIL}`
+    var msg = new Buffer.from(data)
+    socketServer
+        .send(
+        msg,
+        0,
+        msg.length,
+        PORT,
+        destination,
+        function(err, bytes){
+            if (err) throw err;
+            console.log(`UDP message sent to ${destination}`);
+        });
+    setTimeout(function() {}, 2000);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 7000)); 
+    for (var i = 0; i < SERVER_ARRAY.length; i++) {
+        if (SERVER_ARRAY[i] !== SERVER_DETAIL) {
+            
+            sender(socketServer, SERVER_ARRAY[i])
+            
+        }
+    }
+
 }
 
-
+main()
 // const serversToBeCalled = SERVER_ARRAY.filter(server => SERVER_DETAIL !== server)
 // const promises = serversToBeCalled.map(s => sender(socketServer, s))
 // const x = Promise.allSettled(promises)

@@ -45,5 +45,37 @@ services:
     ports:
       - 8087:8000
     environment:
-      - NODE_PORT=8088
+      - NODE_PORT=8087
       - SERVER_NAME=Node3
+
+  node4:
+    container_name : Node4
+    build:
+      dockerfile: Dockerfile
+      context: "./node"
+    volumes:
+    - /app/node_modules
+    - ./node:/app
+    image: phase3_node
+    restart: always
+    ports:
+      - 8086:8000
+    environment:
+      - NODE_PORT=8086
+      - SERVER_NAME=Node4
+
+  node5:
+    container_name : Node5
+    build:
+      dockerfile: Dockerfile
+      context: "./node"
+    volumes:
+    - /app/node_modules
+    - ./node:/app
+    image: phase3_node
+    restart: always
+    ports:
+      - 8085:8000
+    environment:
+      - NODE_PORT=8085
+      - SERVER_NAME=Node5
