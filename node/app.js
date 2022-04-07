@@ -49,9 +49,10 @@ const changeState = (state) => {
 }
 
 const vote = (msg) => {
-  if (node.state === STATES.CANDIDATE) {
+  if (!msg && node.state === STATES.CANDIDATE) {
     node.votedFor = node.name
     voteTally = 1
+    return
   }
   else if (msg.term > node.term) {
     if (node.votedFor === '') {
@@ -63,6 +64,7 @@ const vote = (msg) => {
       return createVoteAcnowledgement(false, msg)
   }
   // logic to check log entries
+  return createVoteAcnowledgement(false, msg)
 }
 
 socketServer.bind(PORT, () => {
@@ -82,7 +84,6 @@ const sender = (socketServer, destination, data) => {
           if (err) throw err;
           console.log(`UDP message sent to ${destination}`);
       });
-  // setTimeout(function() {}, 2000);
 }
 
 function sendMessage(data) {
@@ -113,7 +114,7 @@ const becomeLeader = () => {
   changeState(STATES.LEADER)
   clearTimeout(timeoutTimer)
   voteTally = 0
-  console.log(node);
+  console.log(`Line numver : 116 ${JSON.stringify(node)}`);
 }
 
 const listener = async (socketServer) => {
@@ -122,13 +123,13 @@ const listener = async (socketServer) => {
   socketServer.on('message',function(msg, rinfo) {
     clearTimeout(timeoutTimer)
     msg = JSON.parse(msg.toString())
-    console.log(msg);
+    console.log(`Line 125: ${JSON.stringify(msg)}`);
     if (msg.request === 'VOTE_REQUEST') {
       const responseVoteMsg = vote(msg)
-      console.log(responseVoteMsg);
       sender(socketServer, msg.sender_name, responseVoteMsg)
     }
     else if (msg.request === 'VOTE_ACK' && msg.granted) {
+      if (node.state === STATES.LEADER) return;
       voteTally++
       if (voteTally >= SERVER_ARRAY.length/2) {
         becomeLeader()
