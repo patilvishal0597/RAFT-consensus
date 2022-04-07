@@ -1,32 +1,44 @@
 const STATES = require('./config')
-
-console.log(performance.now());
-console.log("Node is starting");
+const msgJson = require('./Message.json')
 let UDP_Socket = require('dgram');
+console.log(`Node is starting at time: ${performance.now()}`);
 
 let socketServer = UDP_Socket.createSocket('udp4');
 
 const PORT = 8000;
-const SERVER_DETAIL = process.env.SERVER_NAME
 const SERVER_ARRAY=['Node1', 'Node2', 'Node3', 'Node4', 'Node5']
-const TIMEOUT = process.env.TIMEOUT
-let timeoutTimer = null;
-let nodeState = STATES.FOLLOWER
+
+const node = {
+  name: process.env.SERVER_NAME,
+  state: STATES.FOLLOWER,
+  term: 0,
+  votedFor: '',
+  logs: [],
+  timeout: process.env.TIMEOUT
+}
+
+const incrementTerm = () => {
+  node.term = node.term + 1
+}
+
+const changeState = (state) => {
+  node.state = state
+}
 
 socketServer.bind(PORT, () => {
   socketServer.setRecvBufferSize(9999999);
 });
 
+const createVoteRequest = () => {
+  const msg = { ...msgJson }
+  msg.sender_name = node.name
+  msg.term = node.term
+  msg.request = 'VOTE_REQUEST'
+  return JSON.stringify(msg)
+}
 
-
-// const function_to_demonstrate_multithreading = () => {
-//     for (let i = 0; i < 5; i++) {
-//         console.log("Hi Executing Dummy function : " + i)
-//     }
-//     setTimeout(300)
-// }
 const sender = (socketServer, destination) => {
-  const data = `Sending message from ${SERVER_DETAIL}`
+  const data = createVoteRequest()
   var msg = new Buffer.from(data)
   socketServer
       .send(
@@ -43,22 +55,27 @@ const sender = (socketServer, destination) => {
 }
 
 function sendMessage() {
-  const serversToBeCalled = SERVER_ARRAY.filter(server => SERVER_DETAIL !== server)
-  const promises = serversToBeCalled.map(s => sender(socketServer, s))
+  const serversToBeCalled = SERVER_ARRAY.filter(server => node.name !== server)
+  const promises = serversToBeCalled.map(server => sender(socketServer, server))
   Promise.allSettled(promises)
 }
 
+let timeoutTimer = null;
+
 function setElectionTimeout() {
-  timeoutTimer = setTimeout(function() {
-    // change to CANDIDATE
-    nodeState=STATES.CANDIDATE
+  timeoutTimer = setTimeout(function reset() {
+    console.log("I am called");
+    changeState(STATES.CANDIDATE)
+    incrementTerm()
     sendMessage()
     // send vote request
     // call timer
-  }, 300)
+    timeoutTimer = setTimeout(reset, node.timeout)
+  }, node.timeout)
 }
 
-const listener = (socketServer) => {
+const listener = async (socketServer) => {
+  // await new Promise(resolve => setTimeout(resolve, 3000));
   setElectionTimeout()
   socketServer.on('message',function(msg, rinfo) {
     clearTimeout(timeoutTimer)
@@ -70,8 +87,12 @@ const listener = (socketServer) => {
 }
 
 async function main() {
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
+    // await new Promise(resolve => setTimeout(resolve, 3000));
+    // if (SERVER_DETAIL === 'Node5') {
+    //   const serversToBeCalled = SERVER_ARRAY.filter(server => SERVER_DETAIL !== server)
+    //   const promises = serversToBeCalled.map(s => sendMessageFromNode5(socketServer, s))
+    //   await Promise.allSettled(promises)
+    // }
     listener(socketServer)
 
 
@@ -81,3 +102,15 @@ async function main() {
 }
 
 main()
+
+const sendMessageFromNode5 = () => {
+  const data = `I am up`
+  var msg = new Buffer.from(data)
+  socketServer.send(msg,
+      0,msg.length,
+      PORT,destination,
+      function(err, bytes){
+          if (err) throw err;
+          console.log(`UDP message sent to ${destination}`);
+      });
+}
