@@ -1,4 +1,4 @@
-export const STATES = {
+module.exports = {
   CANDIDATE: 'CANDIDATE',
   FOLLOWER: 'FOLLOWER',
   LEADER: 'LEADER'
