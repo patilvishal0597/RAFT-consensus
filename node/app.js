@@ -17,28 +17,59 @@ const node = {
   timeout: process.env.TIMEOUT
 }
 
-const incrementTerm = () => {
-  node.term = node.term + 1
+const createVoteRequest = () => {
+  const msg = { ...msgJson }
+  msg.sender_name = node.name
+  msg.term = node.term
+  msg.request = 'VOTE_REQUEST'
+  msg.candidateId = node.name
+  msg.lastLogIndex = -1
+  msg.lastLogTerm = 0
+  return JSON.stringify(msg)
+}
+
+const createVoteAcnowledgement = (responseInd, voteRequestMsg) => {
+  const msg = { ...msgJson }
+  msg.sender_name = node.name
+  msg.term = node.term
+  msg.request = 'VOTE_ACK'
+  msg.granted = responseInd
+  msg.candidateId = voteRequestMsg.candidateId
+  return JSON.stringify(msg)
+}
+
+let voteTally = 0
+
+const incrementTerm = (jump) => {
+  node.term = node.term + jump
 }
 
 const changeState = (state) => {
   node.state = state
 }
 
+const vote = (msg) => {
+  if (node.state === STATES.CANDIDATE) {
+    node.votedFor = node.name
+    voteTally = 1
+  }
+  else if (msg.term > node.term) {
+    if (node.votedFor === '') {
+      incrementTerm(msg.term - node.term)
+      node.votedFor = msg.candidateId
+      return createVoteAcnowledgement(true, msg)
+    }
+    else
+      return createVoteAcnowledgement(false, msg)
+  }
+  // logic to check log entries
+}
+
 socketServer.bind(PORT, () => {
   socketServer.setRecvBufferSize(9999999);
 });
 
-const createVoteRequest = () => {
-  const msg = { ...msgJson }
-  msg.sender_name = node.name
-  msg.term = node.term
-  msg.request = 'VOTE_REQUEST'
-  return JSON.stringify(msg)
-}
-
-const sender = (socketServer, destination) => {
-  const data = createVoteRequest()
+const sender = (socketServer, destination, data) => {
   var msg = new Buffer.from(data)
   socketServer
       .send(
@@ -54,24 +85,35 @@ const sender = (socketServer, destination) => {
   // setTimeout(function() {}, 2000);
 }
 
-function sendMessage() {
+function sendMessage(data) {
   const serversToBeCalled = SERVER_ARRAY.filter(server => node.name !== server)
-  const promises = serversToBeCalled.map(server => sender(socketServer, server))
+  const promises = serversToBeCalled.map(server => sender(socketServer, server, data))
   Promise.allSettled(promises)
+}
+
+const voteRequest = () => {
+  incrementTerm(1)
+  changeState(STATES.CANDIDATE)
+  vote()
+  const data = createVoteRequest()
+  sendMessage(data)
 }
 
 let timeoutTimer = null;
 
 function setElectionTimeout() {
   timeoutTimer = setTimeout(function reset() {
-    console.log("I am called");
-    changeState(STATES.CANDIDATE)
-    incrementTerm()
-    sendMessage()
-    // send vote request
-    // call timer
+    voteRequest()
     timeoutTimer = setTimeout(reset, node.timeout)
   }, node.timeout)
+}
+
+const becomeLeader = () => {
+  console.log("I am in becomeLeader");
+  changeState(STATES.LEADER)
+  clearTimeout(timeoutTimer)
+  voteTally = 0
+  console.log(node);
 }
 
 const listener = async (socketServer) => {
@@ -79,9 +121,22 @@ const listener = async (socketServer) => {
   setElectionTimeout()
   socketServer.on('message',function(msg, rinfo) {
     clearTimeout(timeoutTimer)
-    // send votes to candidate
-    console.log(`I received this msg: ${msg}`)
-
+    msg = JSON.parse(msg.toString())
+    console.log(msg);
+    if (msg.request === 'VOTE_REQUEST') {
+      const responseVoteMsg = vote(msg)
+      console.log(responseVoteMsg);
+      sender(socketServer, msg.sender_name, responseVoteMsg)
+    }
+    else if (msg.request === 'VOTE_ACK' && msg.granted) {
+      voteTally++
+      if (voteTally >= SERVER_ARRAY.length/2) {
+        becomeLeader()
+      }
+    }
+    else if (msg.request === 'APPEND_RPC') {
+      // do something here
+    }
     setElectionTimeout()
   });
 }
