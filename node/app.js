@@ -126,8 +126,8 @@ const voteRequest = () => {
 let timeoutTimer = null;
 let heartbeatTimer = null;
 
-function setElectionTimeout() {
-  clearTimeout(timeoutTimer)
+async function setElectionTimeout() {
+  await clearTimeout(timeoutTimer)
   console.log(`Within setElectionTimeout: ${performance.now()}`);
   timeoutTimer = setTimeout(function resetElectionTimer() {
     console.log(`Within resetElectionTimer: ${performance.now()}`);
@@ -135,8 +135,6 @@ function setElectionTimeout() {
     timeoutTimer = setTimeout(resetElectionTimer, node.timeout)
   }, node.timeout)
 }
-
-setTimeout(setElectionTimeout, node.timeout)
 
 const sendHeartbeats = () => {
   const heartbeat = createHeartbeats()
@@ -148,12 +146,12 @@ function setHeartbeatsTimeout() {
     if (node.state === STATES.LEADER) {
       console.log(`Inside ${performance.now()}`);
       sendHeartbeats()
-      heartbeatTimer = setTimeout(resetHeartbeatTimer, 1000)
+      heartbeatTimer = setTimeout(resetHeartbeatTimer, 150)
     }
     else {
       clearTimeout(heartbeatTimer)
     }
-  }, 1000)
+  }, 150)
 }
 
 const becomeLeader = () => {
@@ -194,8 +192,6 @@ const listener = async (socketServer) => {
     }
     else if (msg.request === 'APPEND_RPC') {
       console.log(`Within ${performance.now()}`);
-      // clearTimeout(timeoutTimer)
-      // console.log();
       setElectionTimeout()
     }
   });

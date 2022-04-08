@@ -15,7 +15,7 @@ services:
     environment:
       - NODE_PORT=8089
       - SERVER_NAME=Node1
-      - TIMEOUT=2500
+      - TIMEOUT=300
 
   node2:
     container_name : Node2
@@ -32,7 +32,7 @@ services:
     environment:
       - NODE_PORT=8088
       - SERVER_NAME=Node2
-      - TIMEOUT=2700
+      - TIMEOUT=350
 
   node3:
     container_name : Node3
@@ -49,7 +49,7 @@ services:
     environment:
       - NODE_PORT=8087
       - SERVER_NAME=Node3
-      - TIMEOUT=2800
+      - TIMEOUT=450
 
   node4:
     container_name : Node4
@@ -66,7 +66,7 @@ services:
     environment:
       - NODE_PORT=8086
       - SERVER_NAME=Node4
-      - TIMEOUT=2600
+      - TIMEOUT=370
 
   node5:
     container_name : Node5
@@ -83,4 +83,4 @@ services:
     environment:
       - NODE_PORT=8085
       - SERVER_NAME=Node5
-      - TIMEOUT=2400
+      - TIMEOUT=420
