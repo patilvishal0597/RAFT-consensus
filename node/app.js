@@ -140,8 +140,13 @@ const sendHeartbeats = () => {
 
 function setHeartbeatsTimeout() {
   heartbeatTimer = setTimeout(function resetHeartbeatTimer() {
-    sendHeartbeats()
-    heartbeatTimer = setTimeout(resetHeartbeatTimer, 150)
+    if (node.state === STATES.LEADER) {
+      sendHeartbeats()
+      heartbeatTimer = setTimeout(resetHeartbeatTimer, 150)
+    }
+    else {
+      clearTimeout(heartbeatTimer)
+    }
   }, 150)
 }
 
