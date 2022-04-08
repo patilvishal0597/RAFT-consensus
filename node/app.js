@@ -1,5 +1,7 @@
 const STATES = require('./config')
 const msgJson = require('./Message.json')
+const CurrentState = require('./CurrentState.json')
+const fs = require('fs');
 let UDP_Socket = require('dgram');
 console.log(`Node is starting at time: ${performance.now()}`);
 
@@ -8,6 +10,14 @@ let socketServer = UDP_Socket.createSocket('udp4');
 const PORT = 5555;
 const SERVER_ARRAY=['Node1', 'Node2', 'Node3', 'Node4', 'Node5']
 let nodeIsAlive = true
+
+const CurrState = {
+  currentTerm: null,
+  votedFor: null,
+  Log: null,
+  Timeout: null,
+  Heartbeat: null
+}
 
 const node = {
   name: process.env.SERVER_NAME,
@@ -180,6 +190,11 @@ const listener = async (socketServer) => {
     }
     else if (msg.request === 'SHUTDOWN') {
       changeState(STATES.FOLLOWER)
+      CurrState.Heartbeat = 150
+      CurrState.Timeout = node.timeout
+      CurrState.votedFor = node.votedFor
+      CurrState.currentTerm = node.term
+      fs.writeFileSync(CurrentState, JSON.stringify(CurrState));
       nodeIsAlive=false
       clearTimeout(timeoutTimer)
     }
