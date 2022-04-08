@@ -24,7 +24,7 @@ const incrementTerm = (jump) => {
 }
 
 const changeState = (state) => {
-  console.log(`${state} Line 27`);
+  console.log(`${state} Line 27 ${performance.now()}`);
   node.state = state
 }
 
@@ -104,7 +104,7 @@ const sender = (socketServer, destination, data) => {
       destination,
       function(err, bytes){
           if (err) throw err;
-          console.log(`UDP message sent to ${destination}`);
+          console.log(`UDP MESSAGE: ${JSON.parse(data).request} sent to ${destination} : ${performance.now()}`);
       });
 }
 
@@ -127,11 +127,16 @@ let timeoutTimer = null;
 let heartbeatTimer = null;
 
 function setElectionTimeout() {
+  clearTimeout(timeoutTimer)
+  console.log(`Within setElectionTimeout: ${performance.now()}`);
   timeoutTimer = setTimeout(function resetElectionTimer() {
+    console.log(`Within resetElectionTimer: ${performance.now()}`);
     voteRequest()
     timeoutTimer = setTimeout(resetElectionTimer, node.timeout)
   }, node.timeout)
 }
+
+setTimeout(setElectionTimeout, node.timeout)
 
 const sendHeartbeats = () => {
   const heartbeat = createHeartbeats()
@@ -141,30 +146,30 @@ const sendHeartbeats = () => {
 function setHeartbeatsTimeout() {
   heartbeatTimer = setTimeout(function resetHeartbeatTimer() {
     if (node.state === STATES.LEADER) {
+      console.log(`Inside ${performance.now()}`);
       sendHeartbeats()
-      heartbeatTimer = setTimeout(resetHeartbeatTimer, 150)
+      heartbeatTimer = setTimeout(resetHeartbeatTimer, 1000)
     }
     else {
       clearTimeout(heartbeatTimer)
     }
-  }, 150)
+  }, 1000)
 }
 
 const becomeLeader = () => {
-  console.log("I am in becomeLeader");
-  changeState(STATES.LEADER)
   clearTimeout(timeoutTimer)
+  console.log(`I am in becomeLeader ${performance.now()}`);
+  changeState(STATES.LEADER)
+  sendHeartbeats()
   setHeartbeatsTimeout()
   voteTally = 0
-  console.log(`Line numver : 116 ${JSON.stringify(node)}`);
 }
 
 const listener = async (socketServer) => {
-  // await new Promise(resolve => setTimeout(resolve, 3000));
   setElectionTimeout()
   socketServer.on('message',function(msg, rinfo) {
     msg = JSON.parse(msg.toString())
-    console.log(`Line 125: ${JSON.stringify(msg)}`);
+    console.log(`Line 125: ${JSON.stringify(msg)} ${performance.now()}`);
     if (msg.request === 'VOTE_REQUEST') {
       const responseVoteMsg = vote(msg)
       if (JSON.parse(responseVoteMsg).granted)
@@ -172,7 +177,6 @@ const listener = async (socketServer) => {
       sender(socketServer, msg.sender_name, responseVoteMsg)
     }
     else if (msg.request === 'VOTE_ACK') {
-      console.log(`Line 167: ${node.state}`);
       if (msg.term > node.term) {
         clearTimeout(timeoutTimer)
         incrementTerm(msg.term - node.term)
@@ -180,7 +184,7 @@ const listener = async (socketServer) => {
         changeVotedFor('')
         setElectionTimeout()
       }
-      else if (node.state === STATES.CANDIDATE && msg.granted) {
+      else if (node.state === STATES.CANDIDATE && msg.term===node.term && msg.granted) {
         voteTally++
         console.log(`${voteTally} votes received by ${node.name} for ${node.term}`);
         if (voteTally >= SERVER_ARRAY.length/2) {
@@ -189,7 +193,9 @@ const listener = async (socketServer) => {
       }
     }
     else if (msg.request === 'APPEND_RPC') {
-      clearTimeout(timeoutTimer)
+      console.log(`Within ${performance.now()}`);
+      // clearTimeout(timeoutTimer)
+      // console.log();
       setElectionTimeout()
     }
   });
