@@ -5,8 +5,9 @@ console.log(`Node is starting at time: ${performance.now()}`);
 
 let socketServer = UDP_Socket.createSocket('udp4');
 
-const PORT = 8000;
+const PORT = 5555;
 const SERVER_ARRAY=['Node1', 'Node2', 'Node3', 'Node4', 'Node5']
+let nodeIsAlive = true
 
 const node = {
   name: process.env.SERVER_NAME,
@@ -83,8 +84,10 @@ const vote = (msg) => {
     logOKInd = true
     // do something when logs[] implemented
   }
-  if (msg.term === node.term && node.votedFor === '' && logOKInd)
+  if (msg.term === node.term && node.votedFor === '' && logOKInd) {
+    changeVotedFor(msg.candidateId)
     return createVoteAcnowledgement(true, msg)
+  }
   else
     return createVoteAcnowledgement(false, msg)
 }
@@ -128,7 +131,6 @@ let heartbeatTimer = null;
 
 async function setElectionTimeout() {
   await clearTimeout(timeoutTimer)
-  console.log(`Within setElectionTimeout: ${performance.now()}`);
   timeoutTimer = setTimeout(function resetElectionTimer() {
     console.log(`Within resetElectionTimer: ${performance.now()}`);
     voteRequest()
@@ -144,7 +146,7 @@ const sendHeartbeats = () => {
 function setHeartbeatsTimeout() {
   heartbeatTimer = setTimeout(function resetHeartbeatTimer() {
     if (node.state === STATES.LEADER) {
-      console.log(`Inside ${performance.now()}`);
+      console.log(`SENDING HEARTBEATS ${performance.now()}`);
       sendHeartbeats()
       heartbeatTimer = setTimeout(resetHeartbeatTimer, 150)
     }
@@ -156,7 +158,7 @@ function setHeartbeatsTimeout() {
 
 const becomeLeader = () => {
   clearTimeout(timeoutTimer)
-  console.log(`I am in becomeLeader ${performance.now()}`);
+  console.log(`I am LEADER ${performance.now()}`);
   changeState(STATES.LEADER)
   sendHeartbeats()
   setHeartbeatsTimeout()
@@ -167,32 +169,52 @@ const listener = async (socketServer) => {
   setElectionTimeout()
   socketServer.on('message',function(msg, rinfo) {
     msg = JSON.parse(msg.toString())
-    console.log(`Line 125: ${JSON.stringify(msg)} ${performance.now()}`);
-    if (msg.request === 'VOTE_REQUEST') {
-      const responseVoteMsg = vote(msg)
-      if (JSON.parse(responseVoteMsg).granted)
-        setElectionTimeout()
-      sender(socketServer, msg.sender_name, responseVoteMsg)
+    console.log(`MESSAGE RECEIVED: ${JSON.stringify(msg)} ${performance.now()}`);
+    if (msg.request === 'CONVERT_FOLLOWER') {
+      changeState(STATES.FOLLOWER)
+      nodeIsAlive=true
     }
-    else if (msg.request === 'VOTE_ACK') {
-      if (msg.term > node.term) {
-        clearTimeout(timeoutTimer)
-        incrementTerm(msg.term - node.term)
-        changeState(STATES.FOLLOWER)
-        changeVotedFor('')
-        setElectionTimeout()
+    else if (msg.request === 'TIMEOUT') {
+      setElectionTimeout()
+      voteRequest()
+    }
+    else if (msg.request === 'SHUTDOWN') {
+      changeState(STATES.FOLLOWER)
+      nodeIsAlive=false
+      clearTimeout(timeoutTimer)
+    }
+    else if (msg.request === 'LEADER_INFO') {
+
+    }
+    if (nodeIsAlive) {
+      if (msg.request === 'VOTE_REQUEST') {
+        const responseVoteMsg = vote(msg)
+        if (JSON.parse(responseVoteMsg).granted)
+          setElectionTimeout()
+        sender(socketServer, msg.sender_name, responseVoteMsg)
       }
-      else if (node.state === STATES.CANDIDATE && msg.term===node.term && msg.granted) {
-        voteTally++
-        console.log(`${voteTally} votes received by ${node.name} for ${node.term}`);
-        if (voteTally >= SERVER_ARRAY.length/2) {
-          becomeLeader()
+      else if (msg.request === 'VOTE_ACK') {
+        if (msg.term > node.term) {
+          clearTimeout(timeoutTimer)
+          incrementTerm(msg.term - node.term)
+          changeState(STATES.FOLLOWER)
+          changeVotedFor('')
+          setElectionTimeout()
+        }
+        else if (node.state === STATES.CANDIDATE && msg.term===node.term && msg.granted) {
+          voteTally++
+          console.log(`${voteTally} votes received by ${node.name} for ${node.term}`);
+          if (voteTally >= SERVER_ARRAY.length/2) {
+            becomeLeader()
+          }
         }
       }
-    }
-    else if (msg.request === 'APPEND_RPC') {
-      console.log(`Within ${performance.now()}`);
-      setElectionTimeout()
+      else if (msg.request === 'APPEND_RPC' && msg.term >= node.term) {
+        if (msg.term > node.term) {
+          incrementTerm(msg.term - node.term)
+        }
+        setElectionTimeout()
+      }
     }
   });
 }

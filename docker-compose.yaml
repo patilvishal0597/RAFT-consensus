@@ -11,9 +11,8 @@ services:
     image: phase3_node
     restart: always
     ports:
-      - 8089:8000
+      - 8089:5555
     environment:
-      - NODE_PORT=8089
       - SERVER_NAME=Node1
       - TIMEOUT=300
 
@@ -28,9 +27,8 @@ services:
     image: phase3_node
     restart: always
     ports:
-      - 8088:8000
+      - 8088:5555
     environment:
-      - NODE_PORT=8088
       - SERVER_NAME=Node2
       - TIMEOUT=350
 
@@ -45,9 +43,8 @@ services:
     image: phase3_node
     restart: always
     ports:
-      - 8087:8000
+      - 8087:5555
     environment:
-      - NODE_PORT=8087
       - SERVER_NAME=Node3
       - TIMEOUT=450
 
@@ -62,9 +59,8 @@ services:
     image: phase3_node
     restart: always
     ports:
-      - 8086:8000
+      - 8086:5555
     environment:
-      - NODE_PORT=8086
       - SERVER_NAME=Node4
       - TIMEOUT=370
 
@@ -79,8 +75,12 @@ services:
     image: phase3_node
     restart: always
     ports:
-      - 8085:8000
+      - 8085:5555
     environment:
-      - NODE_PORT=8085
       - SERVER_NAME=Node5
       - TIMEOUT=420
+
+  controller:
+     container_name: Controller
+     build: Controller/.
+     stdin_open: true
