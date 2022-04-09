@@ -15,7 +15,6 @@ services:
       - 8089:5555
     environment:
       - SERVER_NAME=Node1
-      - TIMEOUT=300
 
   node2:
     container_name : Node2
