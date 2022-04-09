@@ -1,8 +1,10 @@
 const STATES = require('./config')
 const msgJson = require('./Message.json')
-const CurrentState = require('./CurrentState.json')
 const fs = require('fs');
+const CurrentState = './CurrentState.json'
 let UDP_Socket = require('dgram');
+const jsonString = fs.readFileSync("./CurrentState.json");
+const CurrState = JSON.parse(jsonString);
 console.log(`Node is starting at time: ${performance.now()}`);
 
 let socketServer = UDP_Socket.createSocket('udp4');
@@ -11,13 +13,10 @@ const PORT = 5555;
 const SERVER_ARRAY=['Node1', 'Node2', 'Node3', 'Node4', 'Node5']
 let nodeIsAlive = true
 
-const CurrState = {
-  currentTerm: null,
-  votedFor: null,
-  Log: null,
-  Timeout: null,
-  Heartbeat: null
-}
+const timeInterval = 150
+const minTimeInterval = timeInterval * 2
+const maxTimeInterval = timeInterval * 3
+const calculateTimeout = (Math.random() * (maxTimeInterval - minTimeInterval + 1)) + minTimeInterval
 
 const node = {
   name: process.env.SERVER_NAME,
@@ -25,7 +24,9 @@ const node = {
   term: 0,
   votedFor: '',
   logs: [],
-  timeout: process.env.TIMEOUT
+  timeout: calculateTimeout,
+  currentLeader: '',
+  heartbeatLength: timeInterval
 }
 
 let voteTally = 0
@@ -45,6 +46,14 @@ const changeVotedFor = (votedFor) => {
 
 const getLastLogIndex = () => {
   return node.logs.length - 1
+}
+
+const changeCurrentLeader = (currentLeader) => {
+  node.currentLeader = currentLeader
+}
+
+const getCurrentLeader = () => {
+  return node.currentLeader
 }
 
 const createVoteRequest = () => {
@@ -75,6 +84,15 @@ const createHeartbeats = () => {
   msg.request = 'APPEND_RPC'
   msg.prevLogIndex = getLastLogIndex()
   msg.prevLogTerm = 0
+  msg.currentLeader = getCurrentLeader()
+  return JSON.stringify(msg)
+}
+
+const modifyLeaderInfoMessage = (msg) => {
+  msg.sender_name = node.name
+  msg.term = node.term
+  msg.key='LEADER'
+  msg.value=getCurrentLeader()
   return JSON.stringify(msg)
 }
 
@@ -158,18 +176,19 @@ function setHeartbeatsTimeout() {
     if (node.state === STATES.LEADER) {
       console.log(`SENDING HEARTBEATS ${performance.now()}`);
       sendHeartbeats()
-      heartbeatTimer = setTimeout(resetHeartbeatTimer, 150)
+      heartbeatTimer = setTimeout(resetHeartbeatTimer, node.heartbeatLength)
     }
     else {
       clearTimeout(heartbeatTimer)
     }
-  }, 150)
+  }, node.heartbeatLength)
 }
 
 const becomeLeader = () => {
   clearTimeout(timeoutTimer)
   console.log(`I am LEADER ${performance.now()}`);
   changeState(STATES.LEADER)
+  changeCurrentLeader(node.name)
   sendHeartbeats()
   setHeartbeatsTimeout()
   voteTally = 0
@@ -185,10 +204,13 @@ const listener = async (socketServer) => {
       nodeIsAlive=true
     }
     else if (msg.request === 'TIMEOUT') {
-      setElectionTimeout()
-      voteRequest()
+      if (nodeIsAlive) {
+        setElectionTimeout()
+        voteRequest()
+      }
     }
     else if (msg.request === 'SHUTDOWN') {
+      clearTimeout(timeoutTimer)
       changeState(STATES.FOLLOWER)
       CurrState.Heartbeat = 150
       CurrState.Timeout = node.timeout
@@ -196,10 +218,12 @@ const listener = async (socketServer) => {
       CurrState.currentTerm = node.term
       fs.writeFileSync(CurrentState, JSON.stringify(CurrState));
       nodeIsAlive=false
-      clearTimeout(timeoutTimer)
     }
     else if (msg.request === 'LEADER_INFO') {
-
+      if (nodeIsAlive) {
+        msg = modifyLeaderInfoMessage(msg)
+        sender(socketServer, msg.sender_name, msg)
+      }
     }
     if (nodeIsAlive) {
       if (msg.request === 'VOTE_REQUEST') {
@@ -228,6 +252,9 @@ const listener = async (socketServer) => {
         if (msg.term > node.term) {
           incrementTerm(msg.term - node.term)
         }
+        if (getCurrentLeader() !== msg.currentLeader) {
+          changeCurrentLeader(msg.currentLeader)
+        }
         setElectionTimeout()
       }
     }
@@ -235,30 +262,7 @@ const listener = async (socketServer) => {
 }
 
 async function main() {
-    // await new Promise(resolve => setTimeout(resolve, 3000));
-    // if (SERVER_DETAIL === 'Node5') {
-    //   const serversToBeCalled = SERVER_ARRAY.filter(server => SERVER_DETAIL !== server)
-    //   const promises = serversToBeCalled.map(s => sendMessageFromNode5(socketServer, s))
-    //   await Promise.allSettled(promises)
-    // }
     listener(socketServer)
-
-
-    // const serversToBeCalled = SERVER_ARRAY.filter(server => SERVER_DETAIL !== server)
-    // const promises = serversToBeCalled.map(s => sender(socketServer, s))
-    // await Promise.allSettled(promises)
 }
 
 main()
-
-const sendMessageFromNode5 = () => {
-  const data = `I am up`
-  var msg = new Buffer.from(data)
-  socketServer.send(msg,
-      0,msg.length,
-      PORT,destination,
-      function(err, bytes){
-          if (err) throw err;
-          console.log(`UDP message sent to ${destination}`);
-      });
-}
