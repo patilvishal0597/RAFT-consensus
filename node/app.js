@@ -220,10 +220,9 @@ const listener = async (socketServer) => {
       nodeIsAlive=false
     }
     else if (msg.request === 'LEADER_INFO') {
-      if (nodeIsAlive) {
+        const destination = msg.sender_name
         msg = modifyLeaderInfoMessage(msg)
-        sender(socketServer, msg.sender_name, msg)
-      }
+        sender(socketServer, destination, msg)
     }
     if (nodeIsAlive) {
       if (msg.request === 'VOTE_REQUEST') {
