@@ -1,3 +1,4 @@
+//Testing branch commit
 const STATES = require('./config')
 const msgJson = require('./Message.json')
 const fs = require('fs');
