@@ -90,6 +90,7 @@ const createHeartbeats = () => {
 
 const modifyLeaderInfoMessage = (msg) => {
   msg.sender_name = node.name
+  msg.request = 'LEADER_INFO'
   msg.term = node.term
   msg.key='LEADER'
   msg.value=getCurrentLeader()
@@ -199,6 +200,7 @@ const listener = async (socketServer) => {
   socketServer.on('message',function(msg, rinfo) {
     msg = JSON.parse(msg.toString())
     console.log(`MESSAGE RECEIVED: ${JSON.stringify(msg)} ${performance.now()}`);
+    var destination;
     if (msg.request === 'CONVERT_FOLLOWER') {
       changeState(STATES.FOLLOWER)
       nodeIsAlive=true
@@ -220,9 +222,11 @@ const listener = async (socketServer) => {
       nodeIsAlive=false
     }
     else if (msg.request === 'LEADER_INFO') {
-        const destination = msg.sender_name
+      if (nodeIsAlive) {
+        destination = msg.sender_name
         msg = modifyLeaderInfoMessage(msg)
         sender(socketServer, destination, msg)
+      }
     }
     if (nodeIsAlive) {
       if (msg.request === 'VOTE_REQUEST') {
@@ -255,6 +259,27 @@ const listener = async (socketServer) => {
           changeCurrentLeader(msg.currentLeader)
         }
         setElectionTimeout()
+      }
+      else if(msg.request === 'STORE'){
+
+        if(node.state === STATES.LEADER){
+          // Implement Store log request logic here
+        }
+        else{
+          destination = msg.sender_name
+          msg = modifyLeaderInfoMessage(msg)
+          sender(socketServer, destination, msg)
+        }
+      }
+      else if(msg.request === 'RETRIEVE'){
+        if(node.state === STATES.LEADER){
+          // Implement Store log request logic here
+        }
+        else{
+          destination = msg.sender_name
+          msg = modifyLeaderInfoMessage(msg)
+          sender(socketServer, destination, msg)
+        }
       }
     }
   });
