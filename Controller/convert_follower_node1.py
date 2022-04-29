@@ -77,6 +77,42 @@ def leaderInfo(skt, target):
     except:
         print(f"ERROR WHILE SENDING REQUEST ACROSS : {traceback.format_exc()}")
 
+
+def store(skt, target):
+    key = input('enter key: ')
+    value = input('enter value: ')
+    msg = json.load(open("Message.json"))
+    msg['sender_name'] = sender
+    msg['request'] = "STORE"
+    msg['key'] = key
+    msg['value'] = value
+    print(f"Store request Created : {msg}")
+
+    # Send Message
+    try:
+        # Encoding and sending the message
+        skt.sendto(json.dumps(msg).encode('utf-8'), (target, port))
+    except:
+        print(f"ERROR WHILE SENDING REQUEST ACROSS : {traceback.format_exc()}")
+
+
+def retrieve(skt, target):
+    msg = json.load(open("Message.json"))
+    msg['sender_name'] = sender
+    msg['request'] = "RETRIEVE"
+    print(f"Request Created : {msg}")
+
+    # Send Message
+    try:
+        # Encoding and sending the message
+        skt.sendto(json.dumps(msg).encode('utf-8'), (target, port))
+    except:
+        print(f"ERROR WHILE SENDING REQUEST ACROSS : {traceback.format_exc()}")
+
+    print("retrieve request is called")
+
+
+
 if __name__ == "__main__":
     # Initialize
     sender = "Controller"
@@ -98,6 +134,10 @@ if __name__ == "__main__":
             shutdown(skt, destination)
         elif choice == 'LEADER_INFO':
             leaderInfo(skt, destination)
+        elif choice == 'STORE':
+            store(skt, destination)
+        elif choice == 'RETRIEVE':
+            retrieve(skt, destination)
         else:
             print('Invalid choice. Re-enter ')
         choice=input('Re-enter choice: ')
