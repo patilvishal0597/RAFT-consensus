@@ -27,10 +27,12 @@ const node = {
   logs: [],
   timeout: calculateTimeout,
   currentLeader: '',
-  heartbeatLength: timeInterval
+  heartbeatLength: timeInterval,
+  commitIndex: 0
 }
 
 let voteTally = 0
+let nextIndex = 0
 
 const incrementTerm = (jump) => {
   node.term = node.term + jump
@@ -265,6 +267,9 @@ const listener = async (socketServer) => {
 
         if(node.state === STATES.LEADER){
           // Implement Store log request logic here
+          node.logs[nextIndex] = msg.value
+          console.log("these are the logs at the leader: ", node.logs)
+          nextIndex += 1
         }
         else{
           destination = msg.sender_name
@@ -274,13 +279,16 @@ const listener = async (socketServer) => {
       }
       else if(msg.request === 'RETRIEVE'){
         if(node.state === STATES.LEADER){
-          // Implement Store log request logic here
+          // Implement retrieve log request logic here
         }
         else{
           destination = msg.sender_name
           msg = modifyLeaderInfoMessage(msg)
           sender(socketServer, destination, msg)
         }
+      }
+      else if(msg.request = 'APPEND_REPLY'){
+        // after receiving Append reply logic
       }
     }
   });
