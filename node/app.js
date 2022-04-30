@@ -1,4 +1,3 @@
-//Testing branch commit
 const STATES = require('./config')
 const msgJson = require('./Message.json')
 const fs = require('fs');
@@ -29,7 +28,14 @@ const node = {
   currentLeader: '',
   heartbeatLength: timeInterval,
   commitIndex: 0, //stable storage variable
-}
+  nextIndex: [],
+  matchIndex: {
+    Node1: 0,
+    Node2: 0,
+    Node3: 0,
+    Node4: 0,
+    Node5: 0 
+  }
 
 const logEntry = {
   term: 0,
@@ -68,8 +74,6 @@ const changeCurrentLeader = (currentLeader) => {
 const getCurrentLeader = () => {
   return node.currentLeader
 }
-
-
 
 const createVoteRequest = () => {
   const msg = { ...msgJson }
@@ -119,25 +123,20 @@ const vote = (msg) => {
     voteTally = 1
     return
   }
-
-  let myLogTerm = getLastLogTerm()
-  let logOKInd = false
-
-  if ((msg.lastLogTerm > myLogTerm) || ((msg.lastLogTerm === myLogTerm) && (msg.lastLogIndex >= getLastLogIndex()))) {
-    logOKInd = true
-    // do something when logs[] implemented
-  }
-
-  let termOKInd = false
-  if ((msg.term > node.term) || ((msg.term === node.term) && (node.votedFor === ''))) {
-    termOKInd = true
-    // do something when logs[] implemented
+  if (msg.term > node.term) {
+    incrementTerm(msg.term - node.term)
+    changeVotedFor('')
+    changeState(STATES.FOLLOWER)
   }
   
-  if (termOKInd && logOKInd) {
+  let myLastLogTerm = getLastLogTerm()
+  
+  let logOKInd = false
+  if ((msg.lastLogTerm > myLastLogTerm) || ((msg.lastLogTerm === myLastLogTerm) && (msg.lastLogIndex >= getLastLogIndex()))) {
+    logOKInd = true
+  }
+  if (msg.term === node.term && node.votedFor === '' && logOKInd) {
     changeVotedFor(msg.candidateId)
-    incrementTerm(msg.term - node.term)
-    changeState(STATES.FOLLOWER)
     return createVoteAcnowledgement(true, msg)
   }
   else
