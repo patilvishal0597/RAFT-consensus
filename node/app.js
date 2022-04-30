@@ -22,13 +22,19 @@ const calculateTimeout = (Math.random() * (maxTimeInterval - minTimeInterval + 1
 const node = {
   name: process.env.SERVER_NAME,
   state: STATES.FOLLOWER,
-  term: 0,
-  votedFor: '',
-  logs: [],
+  term: 0, //stable storage variable
+  votedFor: '', //stable storage variable
+  logs: [], //stable storage variable
   timeout: calculateTimeout,
   currentLeader: '',
   heartbeatLength: timeInterval,
-  commitIndex: 0
+  commitIndex: 0, //stable storage variable
+}
+
+const logEntry = {
+  term: 0,
+  key: '',
+  value: ''
 }
 
 let voteTally = 0
@@ -51,6 +57,10 @@ const getLastLogIndex = () => {
   return node.logs.length - 1
 }
 
+const getLastLogTerm = () => {
+  return getLastLogIndex() === -1 ? 0 : node.logs[getLastLogIndex()].term
+}
+
 const changeCurrentLeader = (currentLeader) => {
   node.currentLeader = currentLeader
 }
@@ -59,6 +69,8 @@ const getCurrentLeader = () => {
   return node.currentLeader
 }
 
+
+
 const createVoteRequest = () => {
   const msg = { ...msgJson }
   msg.sender_name = node.name
@@ -66,7 +78,7 @@ const createVoteRequest = () => {
   msg.request = 'VOTE_REQUEST'
   msg.candidateId = node.name
   msg.lastLogIndex = getLastLogIndex()
-  msg.lastLogTerm = 0
+  msg.lastLogTerm = getLastLogTerm()
   return JSON.stringify(msg)
 }
 
@@ -87,6 +99,7 @@ const createHeartbeats = () => {
   msg.request = 'APPEND_RPC'
   msg.prevLogIndex = getLastLogIndex()
   msg.prevLogTerm = 0
+  msg.leaderCommit = 0 // getCommitIndex should be called here
   msg.currentLeader = getCurrentLeader()
   return JSON.stringify(msg)
 }
@@ -106,18 +119,25 @@ const vote = (msg) => {
     voteTally = 1
     return
   }
-  if (msg.term > node.term) {
-    incrementTerm(msg.term - node.term)
-    changeVotedFor('')
-    changeState(STATES.FOLLOWER)
-  }
+
+  let myLogTerm = getLastLogTerm()
   let logOKInd = false
-  if (msg.lastLogIndex >= getLastLogIndex()) {
+
+  if ((msg.lastLogTerm > myLogTerm) || ((msg.lastLogTerm === myLogTerm) && (msg.lastLogIndex >= getLastLogIndex()))) {
     logOKInd = true
     // do something when logs[] implemented
   }
-  if (msg.term === node.term && node.votedFor === '' && logOKInd) {
+
+  let termOKInd = false
+  if ((msg.term > node.term) || ((msg.term === node.term) && (node.votedFor === ''))) {
+    termOKInd = true
+    // do something when logs[] implemented
+  }
+  
+  if (termOKInd && logOKInd) {
     changeVotedFor(msg.candidateId)
+    incrementTerm(msg.term - node.term)
+    changeState(STATES.FOLLOWER)
     return createVoteAcnowledgement(true, msg)
   }
   else
@@ -267,7 +287,10 @@ const listener = async (socketServer) => {
 
         if(node.state === STATES.LEADER){
           // Implement Store log request logic here
-          node.logs[nextIndex] = msg.value
+          logEntry.term = node.term
+          logEntry.key = msg.key
+          logEntry.value = msg.value
+          node.logs[nextIndex] = logEntry
           console.log("these are the logs at the leader: ", node.logs)
           nextIndex += 1
         }
