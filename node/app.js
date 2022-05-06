@@ -31,18 +31,18 @@ const node = {
   heartbeatLength: timeInterval,
   commitIndex: -1, //stable storage variable
   nextIndex: {
-    Node1: null,
-    Node2: null,
-    Node3: null,
-    Node4: null,
-    Node5: null,
+    Node1: 0,
+    Node2: 0,
+    Node3: 0,
+    Node4: 0,
+    Node5: 0,
   },
   matchIndex: {
-    Node1: null,
-    Node2: null,
-    Node3: null,
-    Node4: null,
-    Node5: null,
+    Node1: -1,
+    Node2: -1,
+    Node3: -1,
+    Node4: -1,
+    Node5: -1,
   },
 }
 
@@ -94,7 +94,7 @@ const setNextIndex = (isJustElected) => {
 const setMatchIndex = (isJustElected) => {
   if (isJustElected) {
     for (var serverName of SERVER_ARRAY) {
-      node.matchIndex[serverName] = 0
+      node.matchIndex[serverName] = -1
     }
   }
 }
@@ -289,7 +289,7 @@ const appendEntriesInFollower = (msg) => {
     }
   }
   if (msg.prevLogIndex + msg.entries.length > getLastLogIndex()) {
-    node.logs.concat(msg.entries)
+    node.logs = node.logs.concat(msg.entries)
   }
   if (msg.leaderCommit > node.commitIndex) {
     node.commitIndex = msg.leaderCommit
@@ -346,7 +346,7 @@ const commitLogEntriesInLeader = (msg) => {
 const handleAppendReply = (msg) => {
   if(msg.term === node.term) {
     if(msg.success && msg.matchIndex >= node.matchIndex[msg.sender_name]){
-      node.nextIndex[msg.sender_name] = msg.matchIndex
+      node.nextIndex[msg.sender_name] = msg.matchIndex + 1
       node.matchIndex[msg.sender_name] = msg.matchIndex
       commitLogEntriesInLeader(msg)
     }
