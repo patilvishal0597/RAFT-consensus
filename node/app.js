@@ -29,12 +29,23 @@ const node = {
   currentLeader: '',
   heartbeatLength: timeInterval,
   commitIndex: 0, //stable storage variable
-  nextIndex: [1, 1, 1, 1, 1],
-  matchIndex: [0, 0, 0, 0, 0]
+  nextIndex: {
+    Node1: null,
+    Node2: null,
+    Node3: null,
+    Node4: null,
+    Node5: null,
+  },
+  matchIndex: {
+    Node1: null,
+    Node2: null,
+    Node3: null,
+    Node4: null,
+    Node5: null,
+  },
 }
 
 let voteTally = 0
-let nextIndex = 0
 
 const incrementTerm = (jump) => {
   node.term = node.term + jump
@@ -66,18 +77,20 @@ const getCurrentLeader = () => {
 
 const getLogs = () => node.logs
 
+const getCommitIndex = () => node.commitIndex
+
 const setNextIndex = (isJustElected) => {
   if (isJustElected) {
-    for (var i = 0; i < node.nextIndex.length; i++) {
-      node.nextIndex[i] = node.logs.length
+    for (var serverName in SERVER_ARRAY) {
+      node.nextIndex.serverName = node.logs.length
     }
   }
 }
 
 const setMatchIndex = (isJustElected) => {
   if (isJustElected) {
-    for (var i = 0; i < node.matchIndex.length; i++) {
-      node.matchIndex[i] = 0
+    for (var serverName in SERVER_ARRAY) {
+      node.matchIndex.serverName = 0
     }
   }
 }
@@ -85,6 +98,10 @@ const setMatchIndex = (isJustElected) => {
 const appendLogEntry = (msg) => {
   const newLogEntry = createLogEntry(msg)
   node.logs.push(newLogEntry)
+}
+
+const getDestinationServerArr = () => {
+  return SERVER_ARRAY.filter(server => node.name !== server)
 }
 
 const createLogEntry = (msg) => {
@@ -116,15 +133,24 @@ const createVoteAcnowledgement = (responseInd, voteRequestMsg) => {
   return JSON.stringify(msg)
 }
 
-const createHeartbeats = () => {
+const createHeartbeats = (destinationServer) => {
   const msg = { ...msgJson }
   msg.sender_name = node.name
-  msg.term = node.term
   msg.request = 'APPEND_RPC'
-  msg.prevLogIndex = getLastLogIndex()
-  msg.prevLogTerm = 0
-  msg.leaderCommit = 0 // getCommitIndex should be called here
   msg.currentLeader = getCurrentLeader()
+  msg.term = node.term
+
+  msg.entries = []
+  msg.prevLogIndex = getLastLogIndex()
+  msg.prevLogTerm = getLastLogTerm()
+  msg.leaderCommit = getCommitIndex()
+
+  const destinationServerNextIndex = node.nextIndex[destinationServer]
+  if (destinationServerNextIndex > 0) {
+    msg.prevLogIndex = destinationServerNextIndex - 1
+    msg.prevLogTerm = node.logs[destinationServerNextIndex - 1].term
+    msg.entries = node.logs.slice(destinationServerNextIndex)
+  }
   return JSON.stringify(msg)
 }
 
@@ -182,19 +208,14 @@ const sender = (socketServer, destination, data) => {
       });
 }
 
-function broadcast(data) {
-  const serversToBeCalled = SERVER_ARRAY.filter(server => node.name !== server)
-  const promises = serversToBeCalled.map(server => sender(socketServer, server, data))
-  Promise.allSettled(promises)
-}
-
 const voteRequest = () => {
   incrementTerm(1)
   changeState(STATES.CANDIDATE)
   vote()
-  // check logs
   const data = createVoteRequest()
-  broadcast(data)
+  const serversToBeCalled = SERVER_ARRAY.filter(server => node.name !== server)
+  const promises = serversToBeCalled.map(server => sender(socketServer, server, data))
+  Promise.allSettled(promises)
 }
 
 let timeoutTimer = null;
@@ -210,8 +231,12 @@ async function setElectionTimeout() {
 }
 
 const sendHeartbeats = () => {
-  const heartbeat = createHeartbeats()
-  broadcast(heartbeat)
+  for (var serverName in SERVER_ARRAY) {
+    if (serverName !== node.name) {
+      const heartbeat = createHeartbeats(serverName)
+      sender(socketServer, serverName, heartbeat)
+    }
+  }
 }
 
 function setHeartbeatsTimeout() {
@@ -237,6 +262,30 @@ const becomeLeader = () => {
   sendHeartbeats()
   setHeartbeatsTimeout()
   voteTally = 0
+}
+
+const handleAppendRPC = (msg) => {
+  console.log("INSIDE APPEND_RPC " + node.term);
+  if (msg.term > node.term) {
+    incrementTerm(msg.term - node.term)
+    changeVotedFor('')
+  }
+  if (msg.term === node.term) {
+    changeState(STATES.FOLLOWER)
+    changeCurrentLeader(msg.currentLeader)
+    clearTimeout(timeoutTimer)
+  }
+  let logOKInd = false
+  if (
+    getLastLogIndex() >= msg.prevLogIndex
+    && ((msg.prevLogIndex === -1) || (node.logs[msg.prevLogIndex].term === msg.prevLogTerm))
+  ) {
+    logOKInd = true
+  }
+  // if (msg.term === node.term && logOKInd) {
+  //
+  // }
+  setElectionTimeout()
 }
 
 const listener = async (socketServer) => {
@@ -295,21 +344,14 @@ const listener = async (socketServer) => {
           }
         }
       }
-      else if (msg.request === 'APPEND_RPC' && msg.term >= node.term) {
-        if (msg.term > node.term) {
-          incrementTerm(msg.term - node.term)
-        }
-        if (getCurrentLeader() !== msg.currentLeader) {
-          changeCurrentLeader(msg.currentLeader)
-        }
-        setElectionTimeout()
+      else if (msg.request === 'APPEND_RPC') {
+        handleAppendRPC(msg)
       }
       else if(msg.request === 'STORE'){
         if(node.state === STATES.LEADER){
           // Implement Store log request logic here
           appendLogEntry(msg)
           console.log("these are the logs at the leader: ", getLogs())
-          nextIndex += 1
         }
         else{
           destination = msg.sender_name
