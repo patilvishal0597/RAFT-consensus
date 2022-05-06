@@ -1,5 +1,6 @@
 const STATES = require('./config')
 const msgJson = require('./Message.json')
+const logJson = require('./Log.json')
 const fs = require('fs');
 const CurrentState = './CurrentState.json'
 let UDP_Socket = require('dgram');
@@ -28,19 +29,8 @@ const node = {
   currentLeader: '',
   heartbeatLength: timeInterval,
   commitIndex: 0, //stable storage variable
-  nextIndex: [],
-  matchIndex: {
-    Node1: 0,
-    Node2: 0,
-    Node3: 0,
-    Node4: 0,
-    Node5: 0 
-  }
-
-const logEntry = {
-  term: 0,
-  key: '',
-  value: ''
+  nextIndex: [1, 1, 1, 1, 1],
+  matchIndex: [0, 0, 0, 0, 0]
 }
 
 let voteTally = 0
@@ -51,7 +41,6 @@ const incrementTerm = (jump) => {
 }
 
 const changeState = (state) => {
-  console.log(`${state} Line 27 ${performance.now()}`);
   node.state = state
 }
 
@@ -73,6 +62,37 @@ const changeCurrentLeader = (currentLeader) => {
 
 const getCurrentLeader = () => {
   return node.currentLeader
+}
+
+const getLogs = () => node.logs
+
+const setNextIndex = (isJustElected) => {
+  if (isJustElected) {
+    for (var i = 0; i < node.nextIndex.length; i++) {
+      node.nextIndex[i] = node.logs.length
+    }
+  }
+}
+
+const setMatchIndex = (isJustElected) => {
+  if (isJustElected) {
+    for (var i = 0; i < node.matchIndex.length; i++) {
+      node.matchIndex[i] = 0
+    }
+  }
+}
+
+const appendLogEntry = (msg) => {
+  const newLogEntry = createLogEntry(msg)
+  node.logs.push(newLogEntry)
+}
+
+const createLogEntry = (msg) => {
+  const newLogEntry = { ...logJson }
+  newLogEntry.term = node.term
+  newLogEntry.key = msg.key
+  newLogEntry.value = msg.value
+  return newLogEntry
 }
 
 const createVoteRequest = () => {
@@ -128,9 +148,9 @@ const vote = (msg) => {
     changeVotedFor('')
     changeState(STATES.FOLLOWER)
   }
-  
+
   let myLastLogTerm = getLastLogTerm()
-  
+
   let logOKInd = false
   if ((msg.lastLogTerm > myLastLogTerm) || ((msg.lastLogTerm === myLastLogTerm) && (msg.lastLogIndex >= getLastLogIndex()))) {
     logOKInd = true
@@ -212,6 +232,8 @@ const becomeLeader = () => {
   console.log(`I am LEADER ${performance.now()}`);
   changeState(STATES.LEADER)
   changeCurrentLeader(node.name)
+  setNextIndex(true)
+  setMatchIndex(true)
   sendHeartbeats()
   setHeartbeatsTimeout()
   voteTally = 0
@@ -283,14 +305,10 @@ const listener = async (socketServer) => {
         setElectionTimeout()
       }
       else if(msg.request === 'STORE'){
-
         if(node.state === STATES.LEADER){
           // Implement Store log request logic here
-          logEntry.term = node.term
-          logEntry.key = msg.key
-          logEntry.value = msg.value
-          node.logs[nextIndex] = logEntry
-          console.log("these are the logs at the leader: ", node.logs)
+          appendLogEntry(msg)
+          console.log("these are the logs at the leader: ", getLogs())
           nextIndex += 1
         }
         else{
