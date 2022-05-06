@@ -69,6 +69,8 @@ const getLastLogTerm = () => {
   return getLastLogIndex() === -1 ? 0 : node.logs[getLastLogIndex()].term
 }
 
+const getLogLength = () => node.logs.length
+
 const changeCurrentLeader = (currentLeader) => {
   node.currentLeader = currentLeader
 }
@@ -84,7 +86,7 @@ const getCommitIndex = () => node.commitIndex
 const setNextIndex = (isJustElected) => {
   if (isJustElected) {
     for (var serverName of SERVER_ARRAY) {
-      node.nextIndex.serverName = node.logs.length
+      node.nextIndex[serverName] = node.logs.length
     }
   }
 }
@@ -92,7 +94,7 @@ const setNextIndex = (isJustElected) => {
 const setMatchIndex = (isJustElected) => {
   if (isJustElected) {
     for (var serverName of SERVER_ARRAY) {
-      node.matchIndex.serverName = 0
+      node.matchIndex[serverName] = 0
     }
   }
 }
@@ -142,16 +144,16 @@ const createAppendRPC = (destinationServer) => {
   msg.currentLeader = getCurrentLeader()
   msg.term = node.term
 
-  msg.entries = []
   msg.prevLogIndex = getLastLogIndex()
   msg.prevLogTerm = getLastLogTerm()
   msg.leaderCommit = getCommitIndex()
 
   const destinationServerNextIndex = node.nextIndex[destinationServer]
+  msg.entries = node.logs.slice(destinationServerNextIndex)
+  msg.prevLogIndex = destinationServerNextIndex - 1
+
   if (destinationServerNextIndex > 0) {
-    msg.prevLogIndex = destinationServerNextIndex - 1
     msg.prevLogTerm = node.logs[destinationServerNextIndex - 1].term
-    msg.entries = node.logs.slice(destinationServerNextIndex)
   }
   return JSON.stringify(msg)
 }
@@ -278,6 +280,8 @@ const becomeLeader = () => {
 }
 
 const appendEntriesInFollower = (msg) => {
+  console.log("Node details: ", node);
+  console.log("Message details: ", msg);
   if (msg.entries.length > 0 && getLastLogIndex() > msg.prevLogIndex) {
     const index = Math.min(getLastLogIndex(), msg.prevLogIndex + msg.entries.length)
     if (node.logs[index].term !== msg.entries[index - msg.prevLogIndex].term) {
@@ -347,7 +351,7 @@ const handleAppendReply = (msg) => {
       commitLogEntriesInLeader(msg)
     }
     else if (node.nextIndex[msg.sender_name] > 0) {
-      node.nextIndex[msg.sender_name] = node.nextIndex[msg.sender_name] - 1
+      node.nextIndex[msg.sender_name] -= 1
       // check if clearTimeout & sendHeartbeat is required
     }
   }
