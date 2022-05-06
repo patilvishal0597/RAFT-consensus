@@ -12,6 +12,7 @@ let socketServer = UDP_Socket.createSocket('udp4');
 
 const PORT = 5555;
 const SERVER_ARRAY=['Node1', 'Node2', 'Node3', 'Node4', 'Node5']
+
 let nodeIsAlive = true
 
 const timeInterval = 150
@@ -28,7 +29,7 @@ const node = {
   timeout: calculateTimeout,
   currentLeader: '',
   heartbeatLength: timeInterval,
-  commitIndex: 0, //stable storage variable
+  commitIndex: -1, //stable storage variable
   nextIndex: {
     Node1: null,
     Node2: null,
@@ -82,7 +83,7 @@ const getCommitIndex = () => node.commitIndex
 
 const setNextIndex = (isJustElected) => {
   if (isJustElected) {
-    for (var serverName in SERVER_ARRAY) {
+    for (var serverName of SERVER_ARRAY) {
       node.nextIndex.serverName = node.logs.length
     }
   }
@@ -90,7 +91,7 @@ const setNextIndex = (isJustElected) => {
 
 const setMatchIndex = (isJustElected) => {
   if (isJustElected) {
-    for (var serverName in SERVER_ARRAY) {
+    for (var serverName of SERVER_ARRAY) {
       node.matchIndex.serverName = 0
     }
   }
@@ -134,7 +135,7 @@ const createVoteAcnowledgement = (responseInd, voteRequestMsg) => {
   return JSON.stringify(msg)
 }
 
-const createHeartbeats = (destinationServer) => {
+const createAppendRPC = (destinationServer) => {
   const msg = { ...msgJson }
   msg.sender_name = node.name
   msg.request = 'APPEND_RPC'
@@ -152,6 +153,16 @@ const createHeartbeats = (destinationServer) => {
     msg.prevLogTerm = node.logs[destinationServerNextIndex - 1].term
     msg.entries = node.logs.slice(destinationServerNextIndex)
   }
+  return JSON.stringify(msg)
+}
+
+const createAppendReply = (matchIndex, replyInd) => {
+  const msg = { ...msgJson }
+  msg.sender_name = node.name
+  msg.request = 'APPEND_REPLY'
+  msg.term = node.term
+  msg.matchIndex = matchIndex
+  msg.success =  replyInd
   return JSON.stringify(msg)
 }
 
@@ -232,9 +243,10 @@ async function setElectionTimeout() {
 }
 
 const sendHeartbeats = () => {
-  for (var serverName in SERVER_ARRAY) {
+  for (var serverName of SERVER_ARRAY) {
+    console.log("DESTINATION SERVER: ", serverName);
     if (serverName !== node.name) {
-      const heartbeat = createHeartbeats(serverName)
+      const heartbeat = createAppendRPC(serverName)
       sender(socketServer, serverName, heartbeat)
     }
   }
@@ -265,8 +277,22 @@ const becomeLeader = () => {
   voteTally = 0
 }
 
+const appendEntriesInFollower = (msg) => {
+  if (msg.entries.length > 0 && getLastLogIndex() > msg.prevLogIndex) {
+    const index = Math.min(getLastLogIndex(), msg.prevLogIndex + msg.entries.length)
+    if (node.logs[index].term !== msg.entries[index - msg.prevLogIndex].term) {
+      node.logs = node.logs.slice(0, msg.prevLogIndex)
+    }
+  }
+  if (msg.prevLogIndex + msg.entries.length > getLastLogIndex()) {
+    node.logs.concat(msg.entries)
+  }
+  if (msg.leaderCommit > node.commitIndex) {
+    node.commitIndex = msg.leaderCommit
+  }
+}
+
 const handleAppendRPC = (msg) => {
-  console.log("INSIDE APPEND_RPC " + node.term);
   if (msg.term > node.term) {
     incrementTerm(msg.term - node.term)
     changeVotedFor('')
@@ -274,7 +300,6 @@ const handleAppendRPC = (msg) => {
   if (msg.term === node.term) {
     changeState(STATES.FOLLOWER)
     changeCurrentLeader(msg.currentLeader)
-    clearTimeout(timeoutTimer)
   }
   let logOKInd = false
   if (
@@ -283,11 +308,56 @@ const handleAppendRPC = (msg) => {
   ) {
     logOKInd = true
   }
-  // if (msg.term === node.term && logOKInd) {
-  //
-  // }
+  let appendReply = null
+  if (msg.term === node.term && logOKInd) {
+    appendEntriesInFollower(msg)
+    const matchIndex = msg.entries.length + msg.prevLogIndex
+    appendReply = createAppendReply(matchIndex, true)
+  }
+  else {
+    appendReply = createAppendReply(0, false)
+  }
   setElectionTimeout()
+  return appendReply
 }
+
+const commitLogEntriesInLeader = (msg) => {
+  while (getCommitIndex() < getLastLogIndex()) {
+    let matchIndex = 0
+    for (var serverName of SERVER_ARRAY) {
+      if (serverName !== node.name) {
+        if (node.matchIndex[serverName] > getCommitIndex()) {
+          matchIndex += 1
+        }
+      }
+    }
+    if (matchIndex >= 3) {
+      node.commitIndex += 1
+    }
+    else
+      break;
+  }
+}
+
+const handleAppendReply = (msg) => {
+  if(msg.term === node.term) {
+    if(msg.success && msg.matchIndex >= node.matchIndex[msg.sender_name]){
+      node.nextIndex[msg.sender_name] = msg.matchIndex
+      node.matchIndex[msg.sender_name] = msg.matchIndex
+      commitLogEntriesInLeader(msg)
+    }
+    else if (node.nextIndex[msg.sender_name] > 0) {
+      node.nextIndex[msg.sender_name] = node.nextIndex[msg.sender_name] - 1
+      // check if clearTimeout & sendHeartbeat is required
+    }
+  }
+  else if (msg.term > node.term) {
+    incrementTerm(msg.term - node.term)
+    changeState(STATES.FOLLOWER)
+    changeVotedFor('')
+  }
+}
+
 
 const listener = async (socketServer) => {
   setElectionTimeout()
@@ -346,7 +416,8 @@ const listener = async (socketServer) => {
         }
       }
       else if (msg.request === 'APPEND_RPC') {
-        handleAppendRPC(msg)
+        const appendReply = handleAppendRPC(msg)
+        sender(socketServer, msg.sender_name, appendReply)
       }
       else if(msg.request === 'STORE'){
         if(node.state === STATES.LEADER){
@@ -371,7 +442,9 @@ const listener = async (socketServer) => {
         }
       }
       else if(msg.request = 'APPEND_REPLY'){
-        // after receiving Append reply logic
+        if(node.state === STATES.LEADER){
+          handleAppendReply(msg)
+        }
       }
     }
   });
