@@ -52,6 +52,7 @@ const incrementTerm = (jump) => {
 }
 
 const changeState = (state) => {
+  console.log(`${state} Line 27 ${performance.now()}`);
   node.state = state
 }
 
