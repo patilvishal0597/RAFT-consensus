@@ -53,7 +53,6 @@ const incrementTerm = (jump) => {
 }
 
 const changeState = (state) => {
-  console.log(`${state} Line 27 ${performance.now()}`);
   node.state = state
 }
 
@@ -238,7 +237,6 @@ let heartbeatTimer = null;
 async function setElectionTimeout() {
   await clearTimeout(timeoutTimer)
   timeoutTimer = setTimeout(function resetElectionTimer() {
-    console.log(`Within resetElectionTimer: ${performance.now()}`);
     voteRequest()
     timeoutTimer = setTimeout(resetElectionTimer, node.timeout)
   }, node.timeout)
@@ -246,7 +244,6 @@ async function setElectionTimeout() {
 
 const sendHeartbeats = () => {
   for (var serverName of SERVER_ARRAY) {
-    console.log("DESTINATION SERVER: ", serverName);
     if (serverName !== node.name) {
       const heartbeat = createAppendRPC(serverName)
       sender(socketServer, serverName, heartbeat)
@@ -257,7 +254,6 @@ const sendHeartbeats = () => {
 function setHeartbeatsTimeout() {
   heartbeatTimer = setTimeout(function resetHeartbeatTimer() {
     if (node.state === STATES.LEADER) {
-      console.log(`SENDING HEARTBEATS ${performance.now()}`);
       sendHeartbeats()
       heartbeatTimer = setTimeout(resetHeartbeatTimer, node.heartbeatLength)
     }
@@ -280,8 +276,7 @@ const becomeLeader = () => {
 }
 
 const appendEntriesInFollower = (msg) => {
-  console.log("Node details: ", node);
-  console.log("Message details: ", msg);
+  console.log("Node details: ", JSON.stringify(node));
   if (msg.entries.length > 0 && getLastLogIndex() > msg.prevLogIndex) {
     const index = Math.min(getLastLogIndex(), msg.prevLogIndex + msg.entries.length)
     if (node.logs[index].term !== msg.entries[index - msg.prevLogIndex].term) {
@@ -413,7 +408,6 @@ const listener = async (socketServer) => {
         }
         else if (node.state === STATES.CANDIDATE && msg.term===node.term && msg.granted) {
           voteTally++
-          console.log(`${voteTally} votes received by ${node.name} for ${node.term}`);
           if (voteTally >= SERVER_ARRAY.length/2) {
             becomeLeader()
           }
@@ -437,7 +431,16 @@ const listener = async (socketServer) => {
       }
       else if(msg.request === 'RETRIEVE'){
         if(node.state === STATES.LEADER){
-          // Implement retrieve log request logic here
+          destination = msg.sender_name
+          msg.key = 'COMMITTED_LOGS'
+          if(node.commitIndex>=0){
+            msg.value = node.logs.slice(0, node.commitIndex+1)
+          }
+          else if(node.commitIndex === -1){
+            msg.value = 'No logs committed yet'
+          }
+          msg = JSON.stringify(msg)
+          sender(socketServer, destination, msg)
         }
         else{
           destination = msg.sender_name
