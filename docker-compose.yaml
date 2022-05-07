@@ -1,5 +1,16 @@
 version: '3.8'
 services:
+  client:
+    build:
+      dockerfile: Dockerfile
+      context: "./frontend"
+    ports:
+      - 3000:3000
+    image: client
+    volumes:
+      - /app/node_modules
+      - ./frontend:/app
+
   node1:
     container_name: Node1
     build:
