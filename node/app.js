@@ -6,7 +6,6 @@ const CurrentState = './CurrentState.json'
 let UDP_Socket = require('dgram');
 const jsonString = fs.readFileSync("./CurrentState.json");
 const CurrState = JSON.parse(jsonString);
-console.log(`Node is starting at time: ${performance.now()}`);
 
 let socketServer = UDP_Socket.createSocket('udp4');
 
@@ -280,7 +279,7 @@ const appendEntriesInFollower = (msg) => {
   if (msg.entries.length > 0 && getLastLogIndex() > msg.prevLogIndex) {
     const index = Math.min(getLastLogIndex(), msg.prevLogIndex + msg.entries.length)
     if (node.logs[index].term !== msg.entries[index - msg.prevLogIndex].term) {
-      node.logs = node.logs.slice(0, msg.prevLogIndex)
+      node.logs = node.logs.slice(0, msg.prevLogIndex + 1)
     }
   }
   if (msg.prevLogIndex + msg.entries.length > getLastLogIndex()) {
